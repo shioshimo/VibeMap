@@ -167,7 +167,7 @@ namespace VibeMapDesktop
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
             };
 
-            var btnClose = CreateWindowButton("✕", false);
+            var btnClose = CreateWindowButton("✕", false, true);
             btnClose.Width = 30;
             btnClose.Click += (s, e) => Close();
 
@@ -195,23 +195,53 @@ namespace VibeMapDesktop
             Content = outerBorder;
         }
 
-        private Button CreateWindowButton(string text, bool active)
+        private Button CreateWindowButton(string text, bool active, bool isClose = false)
         {
-            return new Button
+            var btn = new Button
             {
                 Content = text,
                 Height = 26,
-                Padding = new Thickness(8, 0, 8, 0),
+                Padding = new Thickness(9, 0, 9, 0),
                 Margin = new Thickness(2, 0, 2, 0),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Foreground = new SolidColorBrush(active
                     ? Color.FromRgb(37, 99, 235)
-                    : Color.FromRgb(120, 117, 110)),
+                    : Color.FromRgb(110, 108, 100)),
                 FontSize = 11.5,
                 FontWeight = FontWeights.Medium,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                FocusVisualStyle = null
             };
+
+            var template = new ControlTemplate(typeof(Button));
+            var borderFactory = new FrameworkElementFactory(typeof(Border));
+            borderFactory.Name = "BtnBorder";
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            borderFactory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+            borderFactory.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+            var contentFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+            contentFactory.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            contentFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+            borderFactory.AppendChild(contentFactory);
+
+            template.VisualTree = borderFactory;
+
+            var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            if (isClose)
+            {
+                hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(239, 68, 68)), "BtnBorder"));
+                hoverTrigger.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+            }
+            else
+            {
+                hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(232, 229, 220)), "BtnBorder"));
+            }
+            template.Triggers.Add(hoverTrigger);
+
+            btn.Template = template;
+            return btn;
         }
 
         private async void OnWindowLoaded(object sender, RoutedEventArgs e)

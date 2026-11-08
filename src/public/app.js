@@ -17,14 +17,12 @@ const state = {
 };
 
 const el = {
-  projectSelect: document.getElementById('projectSelect'),
+  projectDropdown: document.getElementById('projectDropdown'),
+  projectTrigger: document.getElementById('projectTrigger'),
+  projectTriggerLabel: document.getElementById('projectTriggerLabel'),
+  projectMenu: document.getElementById('projectMenu'),
   tabFolders: document.getElementById('tabFolders'),
   tabArch: document.getElementById('tabArch'),
-  archHud: document.getElementById('archHud'),
-  archBigName: document.getElementById('archBigName'),
-  archHowItWorks: document.getElementById('archHowItWorks'),
-  archPurposeText: document.getElementById('archPurposeText'),
-  btnPlayFlow: document.getElementById('btnPlayFlow'),
   canvasViewport: document.getElementById('canvasViewport'),
   canvasPan: document.getElementById('canvasPan'),
   canvasStage: document.getElementById('canvasStage'),
@@ -107,33 +105,78 @@ async function loadRegistry(preferredRoot = null) {
   const firstRoot = state.projects[0] && (state.projects[0].rootPath || state.projects[0].projectRoot);
   const target = preferredRoot || urlRoot || data.activeProjectRoot || firstRoot;
 
-  renderProjectSelect(target);
+  renderProjectMenu(target);
   if (target) {
     await loadProjectMap(target, true);
   }
 }
 
-function renderProjectSelect(selectedRoot) {
-  el.projectSelect.innerHTML = '';
+function closeProjectMenu() {
+  el.projectDropdown.classList.remove('open');
+  el.projectMenu.classList.add('hidden');
+}
+
+function renderProjectMenu(selectedRoot) {
+  el.projectMenu.innerHTML = '';
+  let activeLabel = '选择项目';
+
   for (const p of state.projects) {
     const rPath = p.rootPath || p.projectRoot;
-    const opt = document.createElement('option');
-    opt.value = rPath;
-    opt.textContent = p.name || p.projectName || rPath.split(/[\\/]/).pop();
-    if (rPath === selectedRoot) opt.selected = true;
-    el.projectSelect.appendChild(opt);
+    const folderName = rPath.split(/[\\/]/).filter(Boolean).pop() || rPath;
+    const displayName = p.name || p.projectName || folderName;
+    const isActive = rPath.toLowerCase() === String(selectedRoot || '').toLowerCase();
+
+    if (isActive) {
+      activeLabel = displayName;
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `project-item ${isActive ? 'active' : ''}`;
+    btn.innerHTML = `
+      <div class="project-item-left">
+        <span class="project-item-dot"></span>
+        <span class="project-item-name">${escapeHtml(displayName)}</span>
+      </div>
+      <span class="project-item-dir">${escapeHtml(folderName)}</span>
+    `;
+    btn.addEventListener('click', async () => {
+      closeProjectMenu();
+      if (isActive) return;
+      await apiPost('/api/projects/select', { projectRoot: rPath });
+      await loadProjectMap(rPath, true);
+    });
+    el.projectMenu.appendChild(btn);
   }
-  const addOpt = document.createElement('option');
-  addOpt.value = '__LOAD_NEW__';
-  addOpt.textContent = '+ 加载其他项目目录...';
-  el.projectSelect.appendChild(addOpt);
+
+  el.projectTriggerLabel.textContent = activeLabel;
+
+  const div = document.createElement('div');
+  div.className = 'project-menu-divider';
+  el.projectMenu.appendChild(div);
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'project-item project-item-add';
+  addBtn.innerHTML = `
+    <div class="project-item-left">
+      <span class="project-item-name">+ 加载其他项目目录...</span>
+    </div>
+  `;
+  addBtn.addEventListener('click', () => {
+    closeProjectMenu();
+    el.inputProjectPath.value = '';
+    el.openProjectModal.classList.remove('hidden');
+    setTimeout(() => el.inputProjectPath.focus(), 40);
+  });
+  el.projectMenu.appendChild(addBtn);
 }
 
 async function loadProjectMap(projectRoot, resetCamera = false) {
   const data = await apiGet(`/api/state?projectRoot=${encodeURIComponent(projectRoot)}`);
   state.currentProjectRoot = data.projectRoot;
   state.mapData = data;
-  renderProjectSelect(data.projectRoot);
+  renderProjectMenu(data.projectRoot);
 
   if (resetCamera) {
     state.expandedPaths = new Set(['.']);
@@ -150,7 +193,6 @@ function switchMode(mode) {
   state.mode = mode;
   el.tabFolders.classList.toggle('active', mode === 'folders');
   el.tabArch.classList.toggle('active', mode === 'architecture');
-  el.archHud.classList.toggle('hidden', mode !== 'architecture');
   renderCurrentMode(true);
 }
 
@@ -170,7 +212,7 @@ const NODE_W = 216;
 const ROOT_W = 204;
 const NODE_H = 60;
 const COL_GAP = 290;
-const ROW_GAP = 18;
+const ROW_GAP = 16;
 const ORIGIN_X = 240;
 const ORIGIN_Y = 480;
 
@@ -247,7 +289,6 @@ function renderFolderTree(centerCamera = false) {
   const highlightTarget = state.hoveredPath || state.selectedPath;
   const activeSet = getActiveAncestorSet(highlightTarget);
 
-  // Render SVG Bézier edges inside vector-scaled <g id="edgesGroup">
   let svgHtml = `<g id="edgesGroup" transform="scale(${state.zoom})">`;
   for (const edge of edges) {
     const p1 = positions.get(edge.from);
@@ -267,7 +308,6 @@ function renderFolderTree(centerCamera = false) {
   svgHtml += `</g>`;
   el.canvasEdges.innerHTML = svgHtml;
 
-  // Render compact HTML nodes
   el.canvasNodes.innerHTML = '';
   for (const [nodePath, item] of positions.entries()) {
     const node = item.node;
@@ -384,29 +424,68 @@ function updateHoverBar(node) {
 }
 
 /* =========================================================
-   Mode 2: Clean Architecture Whiteboard
+   Mode 2: True On-Canvas Architecture Whiteboard
    ========================================================= */
-const ARCH_W = 224;
+const ARCH_W = 236;
 const ARCH_H = 92;
 
 function renderArchitectureBoard(centerCamera = false) {
   const mapObj = (state.mapData && state.mapData.map) || {};
   const arch = mapObj.architecture || {};
-
-  el.archBigName.textContent = mapObj.projectName || '项目架构白板';
-  el.archHowItWorks.textContent = mapObj.implementationSummary || '尚未填写实现方式说明';
-  el.archPurposeText.textContent = mapObj.purpose || '尚未填写项目用途';
-
   const nodes = arch.nodes || [];
   const edges = arch.edges || [];
-  state.archPositions.clear();
 
+  state.archPositions.clear();
   el.canvasNodes.innerHTML = '';
   const bounds = [];
 
+  // 1. Render On-Canvas Whiteboard Header Notes at top of the whiteboard
+  const headerLeft = document.createElement('div');
+  headerLeft.className = 'wb-header-card';
+  headerLeft.style.setProperty('--x', `120px`);
+  headerLeft.style.setProperty('--y', `70px`);
+  headerLeft.style.setProperty('--w', `560px`);
+
+  const isPlaying = !!state.flowTimer;
+  headerLeft.innerHTML = `
+    <div class="wb-title-row">
+      <div class="wb-big-name">${escapeHtml(mapObj.projectName || '项目架构白板')}</div>
+      ${edges.length > 0 ? `<button class="flow-play-btn ${isPlaying ? 'playing' : ''}" id="btnPlayFlow">${isPlaying ? '■ 停止演示' : '▶ 演示链路'}</button>` : ''}
+    </div>
+    <div class="wb-how-text">${escapeHtml(mapObj.implementationSummary || '尚未填写实现方式说明')}</div>
+  `;
+  el.canvasNodes.appendChild(headerLeft);
+  bounds.push({ x: 120, y: 70, w: 560, h: 110 });
+
+  const playBtn = headerLeft.querySelector('#btnPlayFlow');
+  if (playBtn) {
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFlowAnimation();
+    });
+  }
+
+  const headerRight = document.createElement('div');
+  headerRight.className = 'wb-header-card';
+  headerRight.style.setProperty('--x', `710px`);
+  headerRight.style.setProperty('--y', `70px`);
+  headerRight.style.setProperty('--w', `340px`);
+  headerRight.innerHTML = `
+    <div class="wb-purpose-label">项目用途</div>
+    <div class="wb-purpose-text">${escapeHtml(mapObj.purpose || '尚未填写项目用途')}</div>
+  `;
+  el.canvasNodes.appendChild(headerRight);
+  bounds.push({ x: 710, y: 70, w: 340, h: 110 });
+
+  // 2. Render Module Cards with generous spacing below the header
   nodes.forEach((n, idx) => {
-    const x = typeof n.x === 'number' ? n.x + 180 : 240 + (idx % 3) * 310;
-    const y = typeof n.y === 'number' ? n.y + 220 : 280 + Math.floor(idx / 3) * 170;
+    const rawX = typeof n.x === 'number' ? n.x : (idx % 3) * 320;
+    const rawY = typeof n.y === 'number' ? n.y : Math.floor(idx / 3) * 170;
+
+    // Stretch horizontal spacing slightly so edge pills have plenty of room
+    const x = Math.round(120 + rawX * 1.15);
+    const y = Math.round(230 + rawY * 1.05);
+
     state.archPositions.set(n.id, { x, y, node: n });
     bounds.push({ x, y, w: ARCH_W, h: ARCH_H });
 
@@ -436,7 +515,7 @@ function renderArchitectureBoard(centerCamera = false) {
         path: n.port || n.host || '模块',
         name: titleText,
         title: titleText,
-        brief: briefText || '点击查看关联目录说明'
+        brief: briefText || '点击查看关联详情'
       });
     });
 
@@ -448,7 +527,7 @@ function renderArchitectureBoard(centerCamera = false) {
       e.preventDefault();
       e.stopPropagation();
       const mapped = n.folderPath ? findTreeNodeByPath(state.mapData.tree, n.folderPath) : null;
-      if (mapped) {
+      if (mapped && n.folderPath !== '.') {
         openDetailDrawer(mapped);
       } else {
         openDetailDrawer({
@@ -472,7 +551,7 @@ function renderArchitectureBoard(centerCamera = false) {
     el.canvasNodes.appendChild(card);
   });
 
-  // Render SVG directional curves + protocol pills
+  // 3. Render SVG directional curves + compact protocol pills
   let svgHtml = `
     <defs>
       <marker id="arrowHead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -495,36 +574,43 @@ function renderArchitectureBoard(centerCamera = false) {
     const c2x = p2.x + ARCH_W / 2;
     const c2y = p2.y + ARCH_H / 2;
 
-    let x1, y1, x2, y2;
-    if (Math.abs(c2x - c1x) >= Math.abs(c2y - c1y)) {
+    let x1, y1, x2, y2, cp1x, cp1y, cp2x, cp2y;
+    if (Math.abs(c2x - c1x) >= Math.abs(c2y - c1y) * 1.15) {
       x1 = c2x >= c1x ? p1.x + ARCH_W : p1.x;
       y1 = c1y;
       x2 = c2x >= c1x ? p2.x : p2.x + ARCH_W;
       y2 = c2y;
+      const dx = (x2 - x1) * 0.45;
+      cp1x = x1 + dx;
+      cp1y = y1;
+      cp2x = x2 - dx;
+      cp2y = y2;
     } else {
       x1 = c1x;
       y1 = c2y >= c1y ? p1.y + ARCH_H : p1.y;
       x2 = c2x;
       y2 = c2y >= c1y ? p2.y : p2.y + ARCH_H;
+      const dy = (y2 - y1) * 0.45;
+      cp1x = x1;
+      cp1y = y1 + dy;
+      cp2x = x2;
+      cp2y = y2 - dy;
     }
 
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2 - 14;
     const isActive = state.flowStepIndex === idx;
+    svgHtml += `<path class="arch-edge ${isActive ? 'active' : ''}" d="M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}" marker-end="url(#${isActive ? 'arrowHeadActive' : 'arrowHead'})" />`;
 
-    svgHtml += `<path class="arch-edge ${isActive ? 'active' : ''}" d="M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}" marker-end="url(#${isActive ? 'arrowHeadActive' : 'arrowHead'})" />`;
-
-    if (edge.label) {
-      const labelText = edge.protocol ? `${edge.protocol} · ${edge.label}` : edge.label;
-      const pillW = Math.max(76, labelText.length * 7.2 + 18);
-      const pillH = 20;
-      const lx = (x1 + 2 * mx + x2) / 4;
-      const ly = (y1 + 2 * my + y2) / 4;
+    const shortPill = edge.protocol || (edge.label ? edge.label.slice(0, 14) : '');
+    if (shortPill) {
+      const pillW = Math.max(66, shortPill.length * 6.8 + 16);
+      const pillH = 19;
+      const lx = (x1 + 3 * cp1x + 3 * cp2x + x2) / 8;
+      const ly = (y1 + 3 * cp1y + 3 * cp2y + y2) / 8;
 
       svgHtml += `
-        <g>
+        <g class="edge-pill-group" data-edge-idx="${idx}">
           <rect class="edge-pill-bg ${isActive ? 'active' : ''}" x="${lx - pillW / 2}" y="${ly - pillH / 2}" width="${pillW}" height="${pillH}" />
-          <text class="edge-pill-text ${isActive ? 'active' : ''}" x="${lx}" y="${ly}">${escapeHtml(labelText)}</text>
+          <text class="edge-pill-text ${isActive ? 'active' : ''}" x="${lx}" y="${ly}">${escapeHtml(shortPill)}</text>
         </g>
       `;
     }
@@ -533,8 +619,26 @@ function renderArchitectureBoard(centerCamera = false) {
   svgHtml += `</g>`;
   el.canvasEdges.innerHTML = svgHtml;
 
+  // Bind hover on edge pills to display full edge description in bottom bar
+  el.canvasEdges.querySelectorAll('.edge-pill-group').forEach((gEl) => {
+    const idx = Number(gEl.getAttribute('data-edge-idx'));
+    const edge = edges[idx];
+    if (!edge) return;
+    gEl.addEventListener('mouseenter', () => {
+      updateHoverBar({
+        path: edge.protocol || '调用连线',
+        name: `${edge.from} → ${edge.to}`,
+        title: `${edge.from} → ${edge.to}`,
+        brief: edge.label || ''
+      });
+    });
+    gEl.addEventListener('mouseleave', () => {
+      updateHoverBar(null);
+    });
+  });
+
   if (centerCamera && bounds.length > 0) {
-    fitBoundsToPositions(bounds, 85);
+    fitBoundsToPositions(bounds, 20);
   } else {
     applyTransform();
   }
@@ -551,14 +655,21 @@ function toggleFlowAnimation() {
   }
 
   state.flowStepIndex = 0;
-  el.btnPlayFlow.classList.add('playing');
-  el.btnPlayFlow.textContent = '■ 停止演示';
   renderArchitectureBoard(false);
 
   state.flowTimer = setInterval(() => {
     state.flowStepIndex = (state.flowStepIndex + 1) % edges.length;
+    const e = edges[state.flowStepIndex];
+    if (e) {
+      updateHoverBar({
+        path: e.protocol || `步骤 ${state.flowStepIndex + 1}`,
+        name: `${e.from} → ${e.to}`,
+        title: `${e.from} → ${e.to}`,
+        brief: e.label || ''
+      });
+    }
     renderArchitectureBoard(false);
-  }, 1300);
+  }, 1400);
 }
 
 function stopFlowAnimation() {
@@ -567,8 +678,6 @@ function stopFlowAnimation() {
     state.flowTimer = null;
   }
   state.flowStepIndex = -1;
-  el.btnPlayFlow.classList.remove('playing');
-  el.btnPlayFlow.textContent = '▶ 演示链路';
 }
 
 /* =========================================================
@@ -676,9 +785,10 @@ function fitBoundsToPositions(rects, topOffset = 0) {
   const contentW = Math.max(1, maxX - minX);
   const contentH = Math.max(1, maxY - minY);
 
-  const scaleX = (vw - 140) / contentW;
-  const scaleY = (vh - 160 - topOffset) / contentH;
-  state.zoom = Math.max(0.85, Math.min(1.05, Math.min(scaleX, scaleY)));
+  const scaleX = (vw - 90) / contentW;
+  const scaleY = (vh - 130 - topOffset) / contentH;
+  const minZoom = state.mode === 'architecture' ? 0.68 : 0.82;
+  state.zoom = Math.max(minZoom, Math.min(1.02, Math.min(scaleX, scaleY)));
 
   const cx = minX + contentW / 2;
   const cy = minY + contentH / 2;
@@ -689,8 +799,16 @@ function fitBoundsToPositions(rects, topOffset = 0) {
 
 function setupCanvasInteractions() {
   el.canvasViewport.addEventListener('mousedown', (e) => {
+    closeProjectMenu();
     if (e.button !== 0) return;
-    if (e.target.closest('.tree-node') || e.target.closest('.arch-card')) return;
+    if (
+      e.target.closest('.tree-node') ||
+      e.target.closest('.arch-card') ||
+      e.target.closest('.wb-header-card') ||
+      e.target.closest('.edge-pill-group')
+    ) {
+      return;
+    }
     state.isPanning = true;
     state.panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
     el.canvasViewport.classList.add('panning');
@@ -743,21 +861,26 @@ function setupCanvasInteractions() {
    UI Event Bindings & SSE Live Reload
    ========================================================= */
 function setupUIEvents() {
-  el.tabFolders.addEventListener('click', () => switchMode('folders'));
-  el.tabArch.addEventListener('click', () => switchMode('architecture'));
-  el.btnPlayFlow.addEventListener('click', toggleFlowAnimation);
+  el.tabFolders.addEventListener('click', () => {
+    closeProjectMenu();
+    switchMode('folders');
+  });
 
-  el.projectSelect.addEventListener('change', async () => {
-    const val = el.projectSelect.value;
-    if (val === '__LOAD_NEW__') {
-      renderProjectSelect(state.currentProjectRoot);
-      el.inputProjectPath.value = '';
-      el.openProjectModal.classList.remove('hidden');
-      setTimeout(() => el.inputProjectPath.focus(), 40);
-      return;
+  el.tabArch.addEventListener('click', () => {
+    closeProjectMenu();
+    switchMode('architecture');
+  });
+
+  el.projectTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = el.projectDropdown.classList.toggle('open');
+    el.projectMenu.classList.toggle('hidden', !isOpen);
+  });
+
+  window.addEventListener('click', (e) => {
+    if (!e.target.closest('#projectDropdown')) {
+      closeProjectMenu();
     }
-    await apiPost('/api/projects/select', { projectRoot: val });
-    await loadProjectMap(val, true);
   });
 
   el.btnCloseDrawer.addEventListener('click', () => {
@@ -801,6 +924,7 @@ function setupUIEvents() {
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      closeProjectMenu();
       el.detailDrawer.classList.add('hidden');
       el.openProjectModal.classList.add('hidden');
       state.selectedPath = null;
@@ -823,6 +947,14 @@ function connectSSE() {
         if (msg.projectRoot) {
           await loadRegistry(msg.projectRoot);
         }
+      } else if (event.type === 'ui-cmd' || msg.type === 'ui-cmd') {
+        if (msg.openMenu) {
+          el.projectDropdown.classList.add('open');
+          el.projectMenu.classList.remove('hidden');
+        }
+        if (msg.mode) {
+          switchMode(msg.mode);
+        }
       } else if (
         event.type === 'map-updated' ||
         event.type === 'fs-changed' ||
@@ -840,6 +972,7 @@ function connectSSE() {
   };
 
   es.addEventListener('window-open', handleEvent);
+  es.addEventListener('ui-cmd', handleEvent);
   es.addEventListener('map-updated', handleEvent);
   es.addEventListener('fs-changed', handleEvent);
   es.addEventListener('project-switched', handleEvent);

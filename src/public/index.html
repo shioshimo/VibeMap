@@ -13,31 +13,24 @@
   <div id="app">
     <!-- Top-Center Single Floating Control Pill -->
     <nav class="top-pill" id="topPill">
-      <div class="project-picker">
-        <span class="status-dot" id="liveDot" title="实时连接已就绪"></span>
-        <select id="projectSelect" class="project-select" title="切换项目或加载新目录"></select>
+      <div class="project-dropdown" id="projectDropdown">
+        <button class="project-trigger" id="projectTrigger" type="button" title="切换项目或加载新目录">
+          <span class="status-dot" id="liveDot"></span>
+          <span class="project-trigger-label" id="projectTriggerLabel">加载中...</span>
+          <svg class="project-trigger-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none">
+            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="project-menu hidden" id="projectMenu"></div>
       </div>
+
       <div class="pill-divider"></div>
+
       <div class="mode-switch" role="tablist">
         <button class="mode-btn active" id="tabFolders" data-mode="folders">文件夹</button>
         <button class="mode-btn" id="tabArch" data-mode="architecture">架构白板</button>
       </div>
     </nav>
-
-    <!-- Architecture Mode Overlay Header (Hidden in Folder Mode) -->
-    <header class="arch-hud hidden" id="archHud">
-      <div class="arch-hud-left">
-        <div class="arch-title-row">
-          <h1 class="arch-big-name" id="archBigName">—</h1>
-          <button class="flow-play-btn" id="btnPlayFlow">▶ 演示链路</button>
-        </div>
-        <p class="arch-how-it-works" id="archHowItWorks">—</p>
-      </div>
-      <div class="arch-hud-right">
-        <div class="arch-purpose-label">项目用途</div>
-        <p class="arch-purpose-text" id="archPurposeText">—</p>
-      </div>
-    </header>
 
     <!-- Interactive Spatial Canvas -->
     <main class="canvas-viewport" id="canvasViewport">

@@ -1,6 +1,6 @@
 :root {
   --bg-canvas: #F5F4EF;
-  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-surface: rgba(255, 255, 255, 0.94);
   --bg-card: #FFFFFF;
   --bg-subtle: #EEEDE6;
 
@@ -20,6 +20,7 @@
   --status-missing: #EF4444;
 
   --shadow-pill: 0 4px 20px rgba(24, 24, 27, 0.06), 0 1px 3px rgba(24, 24, 27, 0.04);
+  --shadow-popover: 0 14px 36px rgba(24, 24, 27, 0.11), 0 2px 8px rgba(24, 24, 27, 0.05);
   --shadow-node: 0 2px 10px rgba(24, 24, 27, 0.04), 0 1px 2px rgba(24, 24, 27, 0.03);
   --shadow-node-hover: 0 8px 24px rgba(24, 24, 27, 0.09), 0 2px 6px rgba(24, 24, 27, 0.04);
   --shadow-sheet: -8px 0 32px rgba(24, 24, 27, 0.08);
@@ -58,7 +59,7 @@ html, body {
 }
 
 /* =========================================================
-   Top-Center Single Floating Pill
+   Top-Center Floating Pill & Crafted Popover Menu
    ========================================================= */
 .top-pill {
   position: fixed;
@@ -68,20 +69,40 @@ html, body {
   z-index: 60;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   height: 40px;
-  padding: 0 6px 0 14px;
+  padding: 0 6px;
   background: var(--bg-surface);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border-light);
   border-radius: 999px;
   box-shadow: var(--shadow-pill);
 }
 
-.project-picker {
-  display: flex;
+.project-dropdown {
+  position: relative;
+}
+
+.project-trigger {
+  height: 30px;
+  padding: 0 10px 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.project-trigger:hover,
+.project-dropdown.open .project-trigger {
+  background: var(--bg-subtle);
 }
 
 .status-dot {
@@ -92,22 +113,134 @@ html, body {
   flex-shrink: 0;
 }
 
-.project-select {
-  appearance: none;
+.project-trigger-label {
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-trigger-chevron {
+  color: var(--ink-secondary);
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.project-dropdown.open .project-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.project-menu {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  min-width: 310px;
+  max-width: 360px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-medium);
+  border-radius: 14px;
+  box-shadow: var(--shadow-popover);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: popDown 0.14s ease-out;
+}
+
+@keyframes popDown {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.project-item {
+  width: 100%;
   border: none;
   background: transparent;
-  color: var(--ink-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  padding-right: 16px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   cursor: pointer;
-  outline: none;
-  max-width: 240px;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: background-color 0.12s ease;
+}
+
+.project-item:hover {
+  background: var(--bg-canvas);
+}
+
+.project-item.active {
+  background: var(--accent-blue-soft);
+}
+
+.project-item-left {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.project-item.active .project-item-dot {
+  background: var(--accent-blue);
+}
+
+.project-item-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%2352525B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 2px center;
+}
+
+.project-item.active .project-item-name {
+  color: var(--accent-blue);
+}
+
+.project-item-dir {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  background: var(--bg-subtle);
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-menu-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 6px;
+}
+
+.project-item-add {
+  color: var(--ink-secondary);
+}
+
+.project-item-add .project-item-name {
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.project-item-add:hover .project-item-name {
+  color: var(--ink-primary);
 }
 
 .pill-divider {
@@ -136,7 +269,7 @@ html, body {
   padding: 5px 14px;
   border-radius: 999px;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .mode-btn:hover {
@@ -148,96 +281,6 @@ html, body {
   color: var(--ink-primary);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
-
-/* =========================================================
-   Architecture Mode HUD Overlay
-   ========================================================= */
-.arch-hud {
-  position: fixed;
-  top: 68px;
-  left: 24px;
-  right: 24px;
-  z-index: 45;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  pointer-events: none;
-}
-
-.arch-hud-left {
-  max-width: 580px;
-  background: var(--bg-surface);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border-light);
-  border-radius: 14px;
-  padding: 14px 18px;
-  box-shadow: var(--shadow-node);
-  pointer-events: auto;
-}
-
-.arch-title-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-
-.arch-big-name {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink-primary);
-}
-
-.flow-play-btn {
-  border: 1px solid rgba(37, 99, 235, 0.22);
-  background: var(--accent-blue-soft);
-  color: var(--accent-blue);
-  font-family: var(--font-sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 4px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.flow-play-btn:hover,
-.flow-play-btn.playing {
-  background: var(--accent-blue);
-  color: #FFFFFF;
-}
-
-.arch-how-it-works {
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--ink-secondary);
-}
-
-.arch-hud-right {
-  max-width: 300px;
-  background: var(--bg-surface);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border-light);
-  border-radius: 14px;
-  padding: 12px 16px;
-  box-shadow: var(--shadow-node);
-  pointer-events: auto;
-}
-
-.arch-purpose-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-muted);
-  margin-bottom: 4px;
-}
-
-.arch-purpose-text {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-primary);
 }
 
 /* =========================================================
@@ -421,13 +464,79 @@ html, body {
 }
 
 /* =========================================================
-   Architecture Mode Whiteboard Cards
+   Architecture Whiteboard Notes & Module Cards (On-Canvas)
    ========================================================= */
+.wb-header-card {
+  position: absolute;
+  left: calc(var(--x) * var(--z));
+  top: calc(var(--y) * var(--z));
+  width: calc(var(--w) * var(--z));
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: calc(14px * var(--z));
+  padding: calc(14px * var(--z)) calc(18px * var(--z));
+  box-shadow: var(--shadow-node);
+  pointer-events: auto;
+}
+
+.wb-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--z));
+  margin-bottom: calc(6px * var(--z));
+}
+
+.wb-big-name {
+  font-size: calc(17px * var(--z));
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+}
+
+.flow-play-btn {
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  background: var(--accent-blue-soft);
+  color: var(--accent-blue);
+  font-family: var(--font-sans);
+  font-size: calc(11.5px * var(--z));
+  font-weight: 600;
+  padding: calc(4px * var(--z)) calc(11px * var(--z));
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.flow-play-btn:hover,
+.flow-play-btn.playing {
+  background: var(--accent-blue);
+  color: #FFFFFF;
+}
+
+.wb-how-text {
+  font-size: calc(12px * var(--z));
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+.wb-purpose-label {
+  font-size: calc(10.5px * var(--z));
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-bottom: calc(4px * var(--z));
+}
+
+.wb-purpose-text {
+  font-size: calc(12px * var(--z));
+  line-height: 1.55;
+  color: var(--ink-primary);
+}
+
 .arch-card {
   position: absolute;
   left: calc(var(--x) * var(--z));
   top: calc(var(--y) * var(--z));
-  width: calc(224px * var(--z));
+  width: calc(236px * var(--z));
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: calc(14px * var(--z));
@@ -449,9 +558,11 @@ html, body {
   background: var(--accent-blue);
 }
 
-.arch-card.role-gateway::before { background: #10B981; }
+.arch-card.role-gateway::before,
+.arch-card.role-client::before { background: #10B981; }
 .arch-card.role-worker::before { background: #D97706; }
-.arch-card.role-external::before { background: #7C3AED; }
+.arch-card.role-external::before,
+.arch-card.role-storage::before { background: #7C3AED; }
 
 .arch-card:hover,
 .arch-card.flow-highlight {
@@ -478,13 +589,17 @@ html, body {
 
 .arch-port-tag {
   font-family: var(--font-mono);
-  font-size: calc(10.5px * var(--z));
+  font-size: calc(10px * var(--z));
   font-weight: 600;
   color: var(--accent-blue);
   background: var(--accent-blue-soft);
-  padding: calc(1px * var(--z)) calc(6px * var(--z));
+  padding: calc(1.5px * var(--z)) calc(6px * var(--z));
   border-radius: calc(5px * var(--z));
   flex-shrink: 0;
+  max-width: calc(118px * var(--z));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .arch-card-title {
@@ -539,6 +654,11 @@ html, body {
   to { stroke-dashoffset: -11; }
 }
 
+.edge-pill-group {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .edge-pill-bg {
   fill: #FFFFFF;
   stroke: rgba(24, 24, 27, 0.12);
@@ -547,7 +667,8 @@ html, body {
   ry: 9;
 }
 
-.edge-pill-bg.active {
+.edge-pill-bg.active,
+.edge-pill-group:hover .edge-pill-bg {
   stroke: var(--accent-blue);
 }
 
@@ -560,7 +681,8 @@ html, body {
   dominant-baseline: central;
 }
 
-.edge-pill-text.active {
+.edge-pill-text.active,
+.edge-pill-group:hover .edge-pill-text {
   fill: var(--accent-blue);
   font-weight: 600;
 }
@@ -777,6 +899,8 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #D4D2C8 transparent;
 }
 
 .sheet-block {
@@ -919,12 +1043,21 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+
+.sheet-btn:hover {
+  background: var(--bg-canvas);
 }
 
 .sheet-btn-primary {
   background: var(--ink-primary);
   border-color: var(--ink-primary);
   color: #FFFFFF;
+}
+
+.sheet-btn-primary:hover {
+  background: #27272A;
 }
 
 /* =========================================================
@@ -945,7 +1078,7 @@ html, body {
   width: 440px;
   background: #FFFFFF;
   border-radius: 16px;
-  box-shadow: var(--shadow-pill);
+  box-shadow: var(--shadow-popover);
   overflow: hidden;
 }
 
