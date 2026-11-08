@@ -1,0 +1,417 @@
+{
+  "version": "1.0",
+  "projectName": "VoiceFlow · AI 实时语音对话项目",
+  "purpose": "让你直接用嘴跟 AI 聊天：把麦克风录到的声音转成字，发给大模型思考，再通过 TTS 把回答变成语音播出来，支持随时插话打断。",
+  "implementationSummary": "前端通过 WebSocket 连接到本地 8000 端口的 Pipeline 打包流水线；Pipeline 依次调用本机 ASR 转文字、云端 LLM 生成回答、以及部署在甲骨文云 9002 端口的 TTS 服务合成语音，最后把音频流推回前端播放。",
+  "techStack": [
+    "Python",
+    "FastAPI",
+    "WebSocket",
+    "Edge-TTS",
+    "Faster-Whisper"
+  ],
+  "updatedAt": "2026-11-08T13:03:33.115Z",
+  "updatedBy": "Antigravity",
+  "folderNodes": {
+    ".": {
+      "title": "AI 实时语音流水线 (VoiceFlow)",
+      "brief": "把语音识别、大模型对话和 TTS 语音合成串成低延迟流水线的完整工程",
+      "details": {
+        "summary": "顶层工程目录。包含前端采集面板、Pipeline 调度网关、ASR 语音转文字和 TTS 语音合成四个核心文件夹。",
+        "deployLocation": "本机 Windows (muri) + 甲骨文云 (muri-oci)",
+        "dependencies": [
+          "Python 3.11",
+          "FastAPI",
+          "WebSocket",
+          "Edge-TTS"
+        ],
+        "ports": [
+          ":8000 (本地总网关)",
+          ":9002 (远程 TTS)"
+        ],
+        "debugTip": "整体跑不通时先看 pipeline/router.py 的 8000 端口有没有启动。"
+      },
+      "snapshotMtime": 1794141564005.5127,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "pipeline": {
+      "title": "流水线打包整合层",
+      "brief": "负责把下面的 ASR、LLM 和 TTS 打包整合成一条自动流转的流水线",
+      "details": {
+        "summary": "接收前端发来的声音流，先调 ASR 转成字，再塞给大模型拿回复，按标点切句后发给 TTS 合成声音推回前端。",
+        "deployLocation": "本机 Windows (127.0.0.1:8000)",
+        "dependencies": [
+          "asyncio",
+          "FastAPI",
+          "websockets"
+        ],
+        "ports": [
+          "WS :8000/stream"
+        ],
+        "debugTip": "如果能识别文字但没声音返回，检查 router.py 里连接 TTS 服务的地址。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "pipeline/router.py": {
+      "title": "流水线主路由",
+      "brief": "串联语音识别、大模型按句切分与 TTS 调用的核心调度脚本",
+      "details": {
+        "summary": "维护每个会话的异步队列，实现边生成文字、边合成语音、边播放的流式效果。",
+        "deployLocation": "本机进程",
+        "dependencies": [
+          "asr.whisper_stream",
+          "tts.edge_synth"
+        ],
+        "ports": [
+          ":8000"
+        ],
+        "debugTip": "延迟变高时看这里的切句标点正则是不是卡住了长句。"
+      },
+      "snapshotMtime": 1794141563989.5664,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "pipeline/interrupt_mgr.py": {
+      "title": "插话打断管理器",
+      "brief": "用户中途开口说话时，立刻掐断正在播放的 AI 语音",
+      "details": {
+        "summary": "监听 VAD 人声激活信号，一旦触发立刻取消当前未完成的 TTS 任务并通知前端清空播放器。",
+        "deployLocation": "本机进程",
+        "dependencies": [
+          " Silero-VAD"
+        ],
+        "ports": [],
+        "debugTip": "如果环境噪音导致 AI 说话老被自己打断，调高这里的 VAD 阈值。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "tts": {
+      "title": "TTS 语音合成中心",
+      "brief": "专门做 TTS 的模块，也就是把 AI 回复的文字实时转化为语音音频",
+      "details": {
+        "summary": "接收切分好的短句文本，优先查本地音频缓存；未命中则调用语音合成模型输出 PCM 音频流。比较吃算力，可独立部署在甲骨文云。",
+        "deployLocation": "甲骨文云 muri-oci (100.107.197.66:9002)",
+        "dependencies": [
+          "edge-tts",
+          "FFmpeg",
+          "aiohttp"
+        ],
+        "ports": [
+          "HTTP POST :9002/synthesize"
+        ],
+        "debugTip": "没声音或者报连接超时，先 ping 100.107.197.66 看看 Tailscale 和 9002 端口在不在。"
+      },
+      "snapshotMtime": 1794143015105.5176,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "tts/edge_synth.py": {
+      "title": "语音合成引擎",
+      "brief": "调用 TTS 接口把文字转成语音字节流",
+      "details": {
+        "summary": "封装了音色选择、语速调节和音频流切片返回逻辑。",
+        "deployLocation": "muri-oci 容器内",
+        "dependencies": [
+          "edge-tts"
+        ],
+        "ports": [
+          ":9002"
+        ],
+        "debugTip": "切换音色报错时检查 voice_name 参数拼写。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "tts/audio_cache.py": {
+      "title": "高频语音缓存池",
+      "brief": "把「在的」「请说」等常用短句的语音缓存在内存里，0延迟秒回",
+      "details": {
+        "summary": "按文本 Hash 缓存合成好的音频块，命中后不用再调远端 TTS 服务。",
+        "deployLocation": "本机内存 / Redis",
+        "dependencies": [
+          "hashlib"
+        ],
+        "ports": [],
+        "debugTip": "改了音色后如果老短句还是旧声音，清空一下缓存目录。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "asr": {
+      "title": "ASR 语音转文字模块",
+      "brief": "负责把麦克风录到的声音实时转化成文字",
+      "details": {
+        "summary": "接收前端 WebSocket 传来的 16kHz 音频流，识别出完整句子后交给 Pipeline 网关。",
+        "deployLocation": "本机 Windows",
+        "dependencies": [
+          "faster-whisper"
+        ],
+        "ports": [
+          "内部调用 / :9001"
+        ],
+        "debugTip": "识别不出中文或乱码时检查采样率是不是 16000Hz。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "asr/whisper_stream.py": {
+      "title": "流式语音识别脚本",
+      "brief": "滑动窗口实时识别音频流并输出文本",
+      "details": {
+        "summary": "每 300ms 对音频缓冲区做一次增量推理。",
+        "deployLocation": "本机 Windows",
+        "dependencies": [
+          "faster-whisper",
+          "numpy"
+        ],
+        "ports": [],
+        "debugTip": "显存不够时把 model_size 从 medium 改成 small。"
+      },
+      "snapshotMtime": 1794141563990.0752,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    },
+    "frontend": {
+      "title": "桌面语音交互前端",
+      "brief": "采集麦克风声音、展示实时字幕、播放 TTS 合成出来的语音",
+      "details": {
+        "summary": "提供录音按钮、波形动画和音频播放队列，通过单条 WebSocket 跟后端 Pipeline 通信。",
+        "deployLocation": "本机桌面窗口",
+        "dependencies": [
+          "WebAudio API",
+          "WebSocket"
+        ],
+        "ports": [
+          ":5173"
+        ],
+        "debugTip": "点开始说话没反应时先看麦克风权限。"
+      },
+      "snapshotMtime": 1794141563991.596,
+      "updatedAt": "2026-11-08T13:03:33.108Z",
+      "updatedBy": "Antigravity"
+    }
+  },
+  "architecture": {
+    "nodes": [
+      {
+        "id": "fe-panel",
+        "label": "前端语音面板",
+        "category": "frontend",
+        "folderPath": "frontend",
+        "host": "本机 (muri)",
+        "port": ":5173",
+        "brief": "录音采集麦克风音频，接收并播放合成好的语音流",
+        "details": {
+          "summary": "",
+          "deployLocation": "本机 (muri)",
+          "dependencies": [],
+          "ports": [
+            ":5173"
+          ],
+          "debugTip": ""
+        },
+        "x": 60,
+        "y": 170,
+        "lockedByUser": false
+      },
+      {
+        "id": "pipeline-hub",
+        "label": "Pipeline 流水线总控",
+        "category": "pipeline",
+        "folderPath": "pipeline",
+        "host": "本机 (muri)",
+        "port": ":8000",
+        "brief": "把 ASR、大模型和 TTS 打包串联成一条自动化处理流水线",
+        "details": {
+          "summary": "",
+          "deployLocation": "本机 (muri)",
+          "dependencies": [],
+          "ports": [
+            ":8000"
+          ],
+          "debugTip": ""
+        },
+        "x": 390,
+        "y": 170,
+        "lockedByUser": false
+      },
+      {
+        "id": "asr-svc",
+        "label": "ASR 语音识别",
+        "category": "service",
+        "folderPath": "asr",
+        "host": "本机 (muri)",
+        "port": ":9001",
+        "brief": "把用户说的声音流实时转成文字",
+        "details": {
+          "summary": "",
+          "deployLocation": "本机 (muri)",
+          "dependencies": [],
+          "ports": [
+            ":9001"
+          ],
+          "debugTip": ""
+        },
+        "x": 390,
+        "y": 25,
+        "lockedByUser": false
+      },
+      {
+        "id": "llm-api",
+        "label": "大语言模型 (LLM)",
+        "category": "external",
+        "folderPath": "pipeline/router.py",
+        "host": "云端 API",
+        "port": "HTTPS :443",
+        "brief": "根据识别出的文字流式生成回复内容，按标点切分成短句",
+        "details": {
+          "summary": "",
+          "deployLocation": "云端 API",
+          "dependencies": [],
+          "ports": [
+            "HTTPS :443"
+          ],
+          "debugTip": ""
+        },
+        "x": 730,
+        "y": 60,
+        "lockedByUser": false
+      },
+      {
+        "id": "tts-svc",
+        "label": "TTS 语音合成服务",
+        "category": "service",
+        "folderPath": "tts",
+        "host": "muri-oci 甲骨文云",
+        "port": ":9002",
+        "brief": "专门负责把短句文字转化为语音音频块（带高频缓存）",
+        "details": {
+          "summary": "",
+          "deployLocation": "muri-oci 甲骨文云",
+          "dependencies": [],
+          "ports": [
+            ":9002"
+          ],
+          "debugTip": ""
+        },
+        "x": 730,
+        "y": 260,
+        "lockedByUser": false
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "from": "fe-panel",
+        "to": "pipeline-hub",
+        "label": "双向音频与控制流",
+        "protocol": "WS :8000"
+      },
+      {
+        "id": "edge-2",
+        "from": "pipeline-hub",
+        "to": "asr-svc",
+        "label": "转发录音帧 / 返回识别文本",
+        "protocol": "Local :9001"
+      },
+      {
+        "id": "edge-3",
+        "from": "pipeline-hub",
+        "to": "llm-api",
+        "label": "发送用户文本 / 流式拿回复",
+        "protocol": "SSE :443"
+      },
+      {
+        "id": "edge-4",
+        "from": "pipeline-hub",
+        "to": "tts-svc",
+        "label": "发送切分短句 / 返回语音流",
+        "protocol": "HTTP :9002"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow-talk",
+        "name": "开口说话到听见回答全流程",
+        "description": "一条语音从麦克风进入直到变成 AI 语音播出的 5 个步骤",
+        "steps": [
+          {
+            "nodeId": "fe-panel",
+            "note": "第 1 步：你在前端对着麦克风说话，音频流通过 WebSocket 发往本地 :8000 端口"
+          },
+          {
+            "nodeId": "pipeline-hub",
+            "note": "第 2 步：Pipeline 流水线收到音频，先检查有没有触发插话打断，然后把声音送给 ASR"
+          },
+          {
+            "nodeId": "asr-svc",
+            "note": "第 3 步：ASR 识别出你说的话（例如「今天天气怎么样」），把文字交回给 Pipeline"
+          },
+          {
+            "nodeId": "llm-api",
+            "note": "第 4 步：Pipeline 请求大模型生成回答，每吐出一个逗号/句号就切成一个短句"
+          },
+          {
+            "nodeId": "tts-svc",
+            "note": "第 5 步：短句发往甲骨文云 :9002 的 TTS 服务转成语音，再由 Pipeline 推回前端播放"
+          }
+        ]
+      }
+    ]
+  },
+  "history": [
+    {
+      "time": "2026-11-08T13:03:33.114Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VoiceFlow 语音流水线示例地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T13:03:33.108Z",
+      "agent": "Antigravity",
+      "summary": "更新了 10 个目录/文件节点说明 (., pipeline, pipeline/router.py)"
+    },
+    {
+      "time": "2026-11-08T12:55:30.067Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VoiceFlow 语音流水线示例地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:55:30.061Z",
+      "agent": "Antigravity",
+      "summary": "更新了 10 个目录/文件节点说明 (., pipeline, pipeline/router.py)"
+    },
+    {
+      "time": "2026-11-08T12:42:59.436Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VoiceFlow 语音流水线示例地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:42:59.431Z",
+      "agent": "Antigravity",
+      "summary": "更新了 10 个目录/文件节点说明 (., pipeline, pipeline/router.py)"
+    },
+    {
+      "time": "2026-11-08T12:39:22.003Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VoiceFlow 语音流水线示例地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:39:21.997Z",
+      "agent": "Antigravity",
+      "summary": "更新了 10 个目录/文件节点说明 (., pipeline, pipeline/router.py)"
+    },
+    {
+      "time": "2026-11-08T12:39:21.991Z",
+      "agent": "System",
+      "summary": "初始化空白项目地图"
+    }
+  ]
+}

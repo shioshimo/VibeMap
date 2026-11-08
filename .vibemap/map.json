@@ -1,0 +1,382 @@
+{
+  "version": "1.0",
+  "projectName": "VibeMap · 项目地图与架构白板系统",
+  "purpose": "解决 Vibe Coding 代码写多了看不懂、维护难的问题。给所有 AI 配一张共享的「项目活地图」，AI 边写代码边维护地图，人随时打开就能看懂目录职责和整体架构。",
+  "implementationSummary": "项目目录下保存结构化的 .vibemap/map.json；任何 AI 通过 MCP 协议或 CLI 读写地图；本地 Server 实时比对磁盘真实文件防止 AI 瞎编，并通过 SSE 实时渲染到独立桌面悬浮窗。",
+  "techStack": [
+    "Node.js",
+    "MCP Protocol",
+    "SSE 实时推送",
+    ".NET 9 WebView2",
+    "SVG Whiteboard"
+  ],
+  "updatedAt": "2026-11-08T13:03:33.121Z",
+  "updatedBy": "Antigravity",
+  "folderNodes": {
+    ".": {
+      "title": "VibeMap · AI 与人类共用的项目地图",
+      "brief": "提供可逐层展开的文件夹地图、架构讲解白板、真实文件同步校验与通用 MCP 接口",
+      "details": {
+        "summary": "让 Vibe Coding 开发者不用翻代码也能一眼看懂项目结构和运行原理；所有 AI 通过 MCP 或 CLI 共享并持续维护同一份地图。",
+        "deployLocation": "本机 Windows 独立桌面悬浮窗 + 本地服务 (:19527)",
+        "dependencies": [
+          "Node.js v24",
+          ".NET 9 WebView2"
+        ],
+        "ports": [
+          ":19527 (本地 UI 与热更新服务)",
+          "stdio (MCP 协议)"
+        ],
+        "debugTip": "窗口打不开时运行 node src/cli.js open 即可自动拉起后台与桌面端。"
+      },
+      "snapshotMtime": 1794142503095.742,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "src": {
+      "title": "核心源码目录",
+      "brief": "包含地图读写内核、实时文件对照器、MCP 服务端、CLI 工具和前端页面",
+      "details": {
+        "summary": "整个工具的核心逻辑层，无任何笨重的第三方依赖，启动仅需几十毫秒。",
+        "deployLocation": "本机 Node.js 环境",
+        "dependencies": [
+          "node:http",
+          "node:fs"
+        ],
+        "ports": [
+          ":19527"
+        ],
+        "debugTip": "改了前端界面直接刷新窗口即可生效。"
+      },
+      "snapshotMtime": 1794142979941.7102,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "src/core.js": {
+      "title": "地图数据内核与文件校验器",
+      "brief": "负责读写 .vibemap/map.json，并实时比对磁盘文件检测过期说明或新增文件",
+      "details": {
+        "summary": "扫描真实目录树并与 AI 写的说明合并，计算每个节点是「已同步」「代码已改待更新」「未写说明」还是「文件已删」。",
+        "deployLocation": "本机进程",
+        "dependencies": [
+          "fs",
+          "path"
+        ],
+        "ports": [],
+        "debugTip": "如果想忽略特定缓存目录，在 IGNORED_NAMES 集合里添加名称。"
+      },
+      "snapshotMtime": 1794142979941.7102,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "src/mcp.js": {
+      "title": "通用 AI MCP 接口服务",
+      "brief": "让 Claude Code、Codex、Antigravity、Cursor 等所有 AI 都能直接读写地图和弹窗",
+      "details": {
+        "summary": "基于标准 JSON-RPC 2.0 实现的 MCP Server，提供 vibemap_get_map、vibemap_upsert_folders、vibemap_update_architecture、vibemap_open_window 四个工具。",
+        "deployLocation": "随 AI 客户端按需拉起 (stdio)",
+        "dependencies": [
+          "src/core.js",
+          "src/launcher.js"
+        ],
+        "ports": [
+          "stdio"
+        ],
+        "debugTip": "AI 更新后会自动通过 /api/notify 通知桌面窗口秒级刷新。"
+      },
+      "snapshotMtime": 1794141161886.9915,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "src/server.js": {
+      "title": "本地实时同步与 Web 服务",
+      "brief": "提供前端界面渲染、文件监听 (fs.watch) 与 SSE 秒级热更新推送",
+      "details": {
+        "summary": "监听 127.0.0.1:19527，当磁盘文件变化或 AI 调用工具时，立即通过 SSE 推送给桌面窗口。",
+        "deployLocation": "本机后台常驻 (127.0.0.1:19527)",
+        "dependencies": [
+          "http",
+          "fs.watch"
+        ],
+        "ports": [
+          ":19527"
+        ],
+        "debugTip": "端口如果已被占用会自动复用现有实例。"
+      },
+      "snapshotMtime": 1794141112532.3438,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "src/public": {
+      "title": "双模式可视化前端界面",
+      "brief": "实现「文件夹逐层展开模式」与「架构讲解白板模式」的可交互界面",
+      "details": {
+        "summary": "包含底部悬停解说栏、跟随气泡、右键详情卡片、可拖拽架构画布与链路演示器。",
+        "deployLocation": "桌面端 WebView2 窗口内",
+        "dependencies": [
+          "HTML5",
+          "SVG",
+          "CSS"
+        ],
+        "ports": [],
+        "debugTip": "白板节点拖拽后坐标会自动锁定，不怕 AI 更新时冲掉你的排版。"
+      },
+      "snapshotMtime": 1794142981957.4487,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "desktop": {
+      "title": "Windows 独立桌面悬浮窗壳",
+      "brief": "基于 .NET + WebView2 的原生桌面窗口，支持一键置顶、迷你悬浮球收起和自动唤醒",
+      "details": {
+        "summary": "编译出轻巧的 VibeMap.exe，平时可以缩小成桌面边缘胶囊，需要看架构时一键展开。",
+        "deployLocation": "本机 Windows 桌面",
+        "dependencies": [
+          ".NET 9 WPF",
+          "WebView2"
+        ],
+        "ports": [],
+        "debugTip": "运行 desktop/build.ps1 可重新编译 VibeMap.exe。"
+      },
+      "snapshotMtime": 1794142105036.6724,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    },
+    "examples": {
+      "title": "内置示例项目库",
+      "brief": "存放演示用的 VoiceFlow 实时语音流水线示例项目",
+      "details": {
+        "summary": "用于直观演示文件夹悬停、右键详情、过期检测以及架构白板连线效果。",
+        "deployLocation": "本机沙盒目录",
+        "dependencies": [],
+        "ports": [],
+        "debugTip": "可在顶部下拉框随时切换回示例项目。"
+      },
+      "snapshotMtime": 1794141563993.6213,
+      "updatedAt": "2026-11-08T13:03:33.116Z",
+      "updatedBy": "Antigravity"
+    }
+  },
+  "architecture": {
+    "nodes": [
+      {
+        "id": "ai-agents",
+        "label": "各类 AI 编程助手",
+        "category": "external",
+        "folderPath": "src/mcp.js",
+        "host": "Claude / Codex / Gemini",
+        "port": "MCP / CLI",
+        "brief": "在写代码的同时，调用工具读取或更新项目地图",
+        "details": {
+          "summary": "",
+          "deployLocation": "Claude / Codex / Gemini",
+          "dependencies": [],
+          "ports": [
+            "MCP / CLI"
+          ],
+          "debugTip": ""
+        },
+        "x": 60,
+        "y": 80,
+        "lockedByUser": false
+      },
+      {
+        "id": "mcp-cli",
+        "label": "MCP & CLI 统一接口层",
+        "category": "pipeline",
+        "folderPath": "src/mcp.js",
+        "host": "本机进程",
+        "port": "stdio",
+        "brief": "向所有 AI 暴露标准化的地图查询、目录标注、白板更新和弹窗指令",
+        "details": {
+          "summary": "",
+          "deployLocation": "本机进程",
+          "dependencies": [],
+          "ports": [
+            "stdio"
+          ],
+          "debugTip": ""
+        },
+        "x": 380,
+        "y": 80,
+        "lockedByUser": false
+      },
+      {
+        "id": "core-engine",
+        "label": "Core 地图内核与真实文件校验",
+        "category": "service",
+        "folderPath": "src/core.js",
+        "host": "本机磁盘",
+        "port": ".vibemap/map.json",
+        "brief": "将地图说明与真实文件夹对照，自动识别未标注文件与代码已改但说明过期的节点",
+        "details": {
+          "summary": "",
+          "deployLocation": "本机磁盘",
+          "dependencies": [],
+          "ports": [
+            ".vibemap/map.json"
+          ],
+          "debugTip": ""
+        },
+        "x": 380,
+        "y": 260,
+        "lockedByUser": false
+      },
+      {
+        "id": "live-server",
+        "label": "本地热更新服务 (Server)",
+        "category": "service",
+        "folderPath": "src/server.js",
+        "host": "127.0.0.1",
+        "port": ":19527",
+        "brief": "监听文件变化与 AI 通知，通过 SSE 毫秒级推送给桌面端",
+        "details": {
+          "summary": "",
+          "deployLocation": "127.0.0.1",
+          "dependencies": [],
+          "ports": [
+            ":19527"
+          ],
+          "debugTip": ""
+        },
+        "x": 720,
+        "y": 170,
+        "lockedByUser": false
+      },
+      {
+        "id": "desktop-win",
+        "label": "VibeMap 桌面悬浮小窗口",
+        "category": "frontend",
+        "folderPath": "src/public",
+        "host": "Windows 桌面",
+        "port": "WebView2",
+        "brief": "提供「文件夹逐层展开」和「架构讲解白板」双视图，支持置顶与收起成胶囊",
+        "details": {
+          "summary": "",
+          "deployLocation": "Windows 桌面",
+          "dependencies": [],
+          "ports": [
+            "WebView2"
+          ],
+          "debugTip": ""
+        },
+        "x": 1040,
+        "y": 170,
+        "lockedByUser": false
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "from": "ai-agents",
+        "to": "mcp-cli",
+        "label": "调用 MCP 工具或 CLI",
+        "protocol": "JSON-RPC"
+      },
+      {
+        "id": "edge-2",
+        "from": "mcp-cli",
+        "to": "core-engine",
+        "label": "读写节点说明与架构图",
+        "protocol": "map.json"
+      },
+      {
+        "id": "edge-3",
+        "from": "core-engine",
+        "to": "live-server",
+        "label": "合并真实文件树与同步状态",
+        "protocol": "fs.watch"
+      },
+      {
+        "id": "edge-4",
+        "from": "mcp-cli",
+        "to": "live-server",
+        "label": "触发实时刷新 / 唤醒窗口",
+        "protocol": "POST :19527"
+      },
+      {
+        "id": "edge-5",
+        "from": "live-server",
+        "to": "desktop-win",
+        "label": "实时渲染双视图画面",
+        "protocol": "SSE 流"
+      }
+    ],
+    "flows": [
+      {
+        "id": "flow-ai-update",
+        "name": "AI 改代码并自动同步地图流程",
+        "description": "当你让 AI 加一个新功能时，VibeMap 是怎么工作的",
+        "steps": [
+          {
+            "nodeId": "ai-agents",
+            "note": "第 1 步：AI 接手任务，先调 vibemap_get_map 一秒读懂当前项目架构和文件夹分工"
+          },
+          {
+            "nodeId": "mcp-cli",
+            "note": "第 2 步：AI 改完代码后，调 vibemap_upsert_folders 和 vibemap_update_architecture 更新说明"
+          },
+          {
+            "nodeId": "core-engine",
+            "note": "第 3 步：内核更新 .vibemap/map.json，并记录当前文件的最新修改时间戳"
+          },
+          {
+            "nodeId": "live-server",
+            "note": "第 4 步：本地服务收到通知，立即通过 SSE 向桌面端广播更新事件"
+          },
+          {
+            "nodeId": "desktop-win",
+            "note": "第 5 步：你桌面的小窗口自动刷新，你能直接看到 AI 改了哪、接了什么端口"
+          }
+        ]
+      }
+    ]
+  },
+  "history": [
+    {
+      "time": "2026-11-08T13:03:33.121Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VibeMap 自身项目地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T13:03:33.116Z",
+      "agent": "Antigravity",
+      "summary": "更新了 8 个目录/文件节点说明 (., src, src/core.js)"
+    },
+    {
+      "time": "2026-11-08T12:55:30.075Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VibeMap 自身项目地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:55:30.070Z",
+      "agent": "Antigravity",
+      "summary": "更新了 8 个目录/文件节点说明 (., src, src/core.js)"
+    },
+    {
+      "time": "2026-11-08T12:42:59.443Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VibeMap 自身项目地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:42:59.438Z",
+      "agent": "Antigravity",
+      "summary": "更新了 8 个目录/文件节点说明 (., src, src/core.js)"
+    },
+    {
+      "time": "2026-11-08T12:39:22.010Z",
+      "agent": "Antigravity",
+      "summary": "初始化 VibeMap 自身项目地图与架构白板"
+    },
+    {
+      "time": "2026-11-08T12:39:22.006Z",
+      "agent": "Antigravity",
+      "summary": "更新了 8 个目录/文件节点说明 (., src, src/core.js)"
+    },
+    {
+      "time": "2026-11-08T12:39:22.005Z",
+      "agent": "System",
+      "summary": "初始化空白项目地图"
+    }
+  ]
+}

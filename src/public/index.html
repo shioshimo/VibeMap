@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeMap</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top-Center Single Floating Control Pill -->
+    <nav class="top-pill" id="topPill">
+      <div class="project-picker">
+        <span class="status-dot" id="liveDot" title="实时连接已就绪"></span>
+        <select id="projectSelect" class="project-select" title="切换项目或加载新目录"></select>
+      </div>
+      <div class="pill-divider"></div>
+      <div class="mode-switch" role="tablist">
+        <button class="mode-btn active" id="tabFolders" data-mode="folders">文件夹</button>
+        <button class="mode-btn" id="tabArch" data-mode="architecture">架构白板</button>
+      </div>
+    </nav>
+
+    <!-- Architecture Mode Overlay Header (Hidden in Folder Mode) -->
+    <header class="arch-hud hidden" id="archHud">
+      <div class="arch-hud-left">
+        <div class="arch-title-row">
+          <h1 class="arch-big-name" id="archBigName">—</h1>
+          <button class="flow-play-btn" id="btnPlayFlow">▶ 演示链路</button>
+        </div>
+        <p class="arch-how-it-works" id="archHowItWorks">—</p>
+      </div>
+      <div class="arch-hud-right">
+        <div class="arch-purpose-label">项目用途</div>
+        <p class="arch-purpose-text" id="archPurposeText">—</p>
+      </div>
+    </header>
+
+    <!-- Interactive Spatial Canvas -->
+    <main class="canvas-viewport" id="canvasViewport">
+      <div class="canvas-pan" id="canvasPan">
+        <div class="canvas-stage" id="canvasStage">
+          <svg class="canvas-edges" id="canvasEdges" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div class="canvas-nodes" id="canvasNodes"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom-Center Hover Brief Bar -->
+    <footer class="hover-bar" id="hoverBar">
+      <div class="hover-idle" id="hoverIdle">
+        <span>移动光标查看简介</span>
+        <span class="dot-sep">·</span>
+        <span>左键展开子级</span>
+        <span class="dot-sep">·</span>
+        <span>右键查看详情</span>
+      </div>
+      <div class="hover-active hidden" id="hoverActive">
+        <span class="hover-path" id="hoverPath">pipeline/</span>
+        <span class="hover-title" id="hoverTitle">流水线整合层</span>
+        <span class="hover-sep">—</span>
+        <span class="hover-brief" id="hoverBrief">负责把下面的 ASR、LLM 和 TTS 打包整合成一条自动流转的流水线</span>
+      </div>
+    </footer>
+
+    <!-- Bottom-Right Minimal Zoom Controls -->
+    <div class="zoom-pill">
+      <button class="zoom-btn" id="btnZoomOut" title="缩小">−</button>
+      <span class="zoom-val" id="zoomLabel">100%</span>
+      <button class="zoom-btn" id="btnZoomIn" title="放大">+</button>
+      <button class="zoom-btn zoom-fit" id="btnZoomReset" title="居中适配">居中</button>
+    </div>
+
+    <!-- Right-Click Slide-Over Detail Card -->
+    <aside class="detail-sheet hidden" id="detailDrawer">
+      <div class="sheet-header">
+        <div>
+          <div class="sheet-meta">
+            <span class="sheet-path" id="drawerPath">./tts</span>
+            <span class="sheet-status" id="drawerSyncBadge">已同步</span>
+          </div>
+          <h2 class="sheet-title" id="drawerTitle">TTS 语音合成中心</h2>
+        </div>
+        <button class="sheet-close" id="btnCloseDrawer" title="关闭 (Esc)">✕</button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="sheet-block">
+          <div class="block-label">简要说明</div>
+          <p class="sheet-brief" id="drawerBrief">—</p>
+        </div>
+
+        <div class="sheet-block">
+          <div class="block-label">实现与细节</div>
+          <div class="sheet-detail" id="drawerDetail">—</div>
+        </div>
+
+        <div class="sheet-grid">
+          <div class="grid-card">
+            <span class="grid-label">部署位置</span>
+            <span class="grid-val" id="drawerDeploy">—</span>
+          </div>
+          <div class="grid-card">
+            <span class="grid-label">端口与协议</span>
+            <span class="grid-val mono" id="drawerPort">—</span>
+          </div>
+        </div>
+
+        <div class="sheet-block" id="drawerDepsSection">
+          <div class="block-label">关联与依赖</div>
+          <div class="deps-wrap" id="drawerDeps"></div>
+        </div>
+
+        <div class="sheet-block" id="drawerFilesSection">
+          <div class="block-label">子项列表</div>
+          <div class="children-list" id="drawerChildren"></div>
+        </div>
+
+        <div class="sheet-block sheet-tip" id="drawerTroubleSection">
+          <div class="block-label">排错提示</div>
+          <div class="trouble-text" id="drawerTrouble">—</div>
+        </div>
+      </div>
+
+      <div class="sheet-footer">
+        <button class="sheet-btn" id="btnOpenExplorer">打开所在目录</button>
+        <button class="sheet-btn sheet-btn-primary" id="btnCopyNodePrompt">复制节点信息</button>
+      </div>
+    </aside>
+
+    <!-- Minimal Load Project Modal -->
+    <div class="modal-mask hidden" id="openProjectModal">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h3>加载项目目录</h3>
+          <button class="sheet-close" id="btnCloseOpenProject">✕</button>
+        </div>
+        <div class="modal-content">
+          <input type="text" id="inputProjectPath" class="path-input" placeholder="输入项目完整路径，如 E:\Inriel_Project\..." />
+          <div class="modal-actions">
+            <button class="sheet-btn sheet-btn-primary" id="btnConfirmOpenProject">加载地图</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast hidden" id="toast">已复制</div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

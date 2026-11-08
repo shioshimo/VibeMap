@@ -1,0 +1,9 @@
+node_modules/
+desktop/bin/
+desktop/obj/
+*.WebView2/
+*.pdb
+*.xml
+crash.log
+.DS_Store
+Thumbs.db
